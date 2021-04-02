@@ -110,9 +110,9 @@ modRF <- train(classe ~ ., data = training, trControl=train_control, method="rf"
 
 ## Results
 
-Model performance has been evaluated on the testing dataset (30% of original data). Since the predicted variable (classe) is categorical, accuracy has been used as measure of performance. Accuracy was computed using the confusionMatrix() command on the testing datset.
+Model performance has been evaluated on the testing dataset (30% of original data). Since the predicted variable (classe) is categorical, accuracy has been used as measure of performance. Accuracy was computed using the confusionMatrix() command on the testing dataset.
 
-It can be seen that Random Forest and Bagging perform much better than Regression tree, and the resason for that is probably the large number of explanatory variables. The best performing model is Random Forest with 99.8% of accuracy.
+It can be seen that Random Forest and Bagging perform much better than Regression tree, and the reason for that is probably the large number of explanatory variables. The best performing model is Random Forest with 99.8% of accuracy. This corresponds to an out-of-sample error of 1-.998 = 0.2%.
 
 ```{r evaluation}
 models <- c("Regression Tree", "Bagging", "Random Forest")
