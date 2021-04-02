@@ -272,8 +272,8 @@ modRF &lt;- train(classe ~ ., data = training, trControl=train_control, method=&
 </div>
 <div id="results" class="section level2">
 <h2>Results</h2>
-<p>Model performance has been evaluated on the testing dataset (30% of original data). Since the predicted variable (classe) is categorical, accuracy has been used as measure of performance. Accuracy was computed using the confusionMatrix() command on the testing datset.</p>
-<p>It can be seen that Random Forest and Bagging perform much better than Regression tree, and the resason for that is probably the large number of explanatory variables. The best performing model is Random Forest with 99.8% of accuracy.</p>
+<p>Model performance has been evaluated on the testing dataset (30% of original data). Since the predicted variable (classe) is categorical, accuracy has been used as measure of performance. Accuracy was computed using the confusionMatrix() command on the testing dataset.</p>
+<p>It can be seen that Random Forest and Bagging perform much better than Regression tree, and the reason for that is probably the large number of explanatory variables. The best performing model is Random Forest with 99.8% of accuracy. This corresponds to an out-of-sample error of 1-.998 = 0.2%.</p>
 <pre class="r"><code>models &lt;- c(&quot;Regression Tree&quot;, &quot;Bagging&quot;, &quot;Random Forest&quot;)
 acc &lt;- rep(NA, 3)
 
