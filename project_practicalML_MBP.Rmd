@@ -1,0 +1,172 @@
+---
+title: "Project - Practical ML"
+author: "Mariana Buongermino Pereira"
+date: "03/01/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+setwd('/Users/marianapereira/Pessoais/DataScience/PracticalML/project/')
+library(tidyverse)
+library(caret)
+library(lubridate)
+library(elasticnet)
+library(pROC)
+library(randomForest)
+#library(plotROC)
+knitr::opts_chunk$set(echo = TRUE, cache = T, message = F, warning = F)
+```
+
+## Introduction
+
+This report aims to describe how to use ML to determine the activity type based on a data collected throughout the day. The background on the Human Activity Recognition (HAR) project, which has collected the data can be found here: <http://groupware.les.inf.puc-rio.br/har>.
+
+## Dataset and preprocessing
+
+We were given two data sets:
+
+* pml-training.csv: to create and test the module. This dataset will be split into training and testing.
+* pml-testing.csv: new data where we should apply the final model and give predictions. This set will be called new data set. It contains 20 data points.
+
+As a very pragmatic approach to reduce dimensionality, all covariates were not present or or that were NA only in the new dataset were removed. Note that this approach allowed to remove covariates that are derivatives from others, i.e. all kurtosis, skewness, average, etc, which was the desired effect since those are not independent variables. 
+
+In addition, all time stamp were discarded and only weekday was kept from all time and date information. As well as all variables with near-zero variability.
+
+```{r data}
+data <- read_csv('pml-training.csv', na = c('#DIV/0!', 'NA')) %>% 
+  select(-X1, -raw_timestamp_part_1, -raw_timestamp_part_2) %>%
+  mutate(classe = as.factor(classe), user_name = as.factor(user_name), new_window = as.factor(new_window), cvtd_timestamp = as_datetime(cvtd_timestamp))
+data <- data %>% 
+  mutate(weekday = as.factor(weekdays(cvtd_timestamp))) %>% 
+  select(-cvtd_timestamp)
+
+newdata <- read_csv('pml-testing.csv', na = c('#DIV/0!', 'NA')) %>% 
+  select(-X1, -raw_timestamp_part_1, -raw_timestamp_part_2) %>%
+  mutate(user_name = as.factor(user_name), new_window = as.factor(new_window), cvtd_timestamp = as_datetime(cvtd_timestamp))
+newdata <- newdata %>% 
+  mutate(weekday = as.factor(weekdays(cvtd_timestamp))) %>%
+  select(-cvtd_timestamp)
+
+# Removing columns with NA only
+not_all_na <- function(x) any(!is.na(x))
+data <- data %>% select_if(not_all_na)
+newdata <- newdata %>% select_if(not_all_na)
+
+# Removing columns from data that are not present in newdata
+i <- which(names(newdata) == 'problem_id')
+colToKeep <- c("classe", names(newdata)[-i])
+data <- data %>% select(all_of(colToKeep))
+
+### removing nzv variables
+nzv_var <- nearZeroVar(data,saveMetrics = T) %>% filter(nzv == TRUE) %>% row.names()
+data <- data %>% select(-all_of(nzv_var))
+newdata <- newdata %>% select(-all_of(nzv_var))
+```
+
+## Training, Test and Validation sets
+
+The pml-training.csv dataset contained 19622 observations. This dataset was split as 
+
+* training dataset, with 70% of the observations
+* training dataset, with 30% of the observations
+
+```{r training-testing}
+set.seed(42)
+inTrain <- createDataPartition(y = data$classe, p = .7, list = F)
+training <- data[inTrain,]
+testing <- data[-inTrain,]
+```
+
+
+## Modelling
+
+Three different models had their performance compared:
+
+* Regression trees
+* Bagging
+* Random forest
+
+The models above were chosen for being their flexibility in dealing with categorical variable, as classe, the one we want to predict. All models were trained on the training dataset using a 10-fold cross-validation. For evaluation, the testing dataset was used. Since the predicted variable, classe, is discrete, measures of specificity, sensitivity and accuracy were used.
+
+```{r load, message=F, echo=F}
+load(file = "my_work_space.RData")
+modRF <- modelRF
+```
+
+```{r models, eval=FALSE}
+train_control<- trainControl(method="cv", number=10, savePredictions = TRUE)
+
+### Regression Tree
+modRT <- train(classe ~ ., method = 'rpart', data = training, trControl=train_control)
+
+### Bagging
+modTB <- train(classe ~ ., method = 'treebag', data = training, trControl=train_control)
+
+### Random Forest
+modRF <- train(classe ~ ., data = training, trControl=train_control, method="rf", prox = T)
+```
+
+
+## Results
+
+Model performance has been evaluated on the testing dataset (30% of original data). Since the predicted variable (classe) is categorical, accuracy has been used as measure of performance. Accuracy was computed using the confusionMatrix() command on the testing datset.
+
+It can be seen that Random Forest and Bagging perform much better than Regression tree, and the resason for that is probably the large number of explanatory variables. The best performing model is Random Forest with 99.8% of accuracy.
+
+```{r evaluation}
+models <- c("Regression Tree", "Bagging", "Random Forest")
+acc <- rep(NA, 3)
+
+### Regression tree
+acc[1] <- confusionMatrix(testing$classe, predict(modRT, testing))$overall['Accuracy']
+
+### Bagging
+acc[2] <- confusionMatrix(testing$classe, predict(modTB, testing))$overall['Accuracy']
+
+### random forest
+acc[3] <- confusionMatrix(testing$classe, predict(modRF, testing))$overall['Accuracy']
+
+tibble(models, acc)
+```
+
+Next, we evaluate what are the most relevant explanatory variables. 
+
+```{r RF}
+varRF <- varImp(modRF)$importance
+varImp <- varRF %>% arrange(desc(Overall)) %>% head(n = 10)
+
+varImp
+```
+
+For the two most relevant variables, we can observe correct predictions per classe.
+
+```{r visu}
+testing <- testing %>%
+  mutate(pred = predict(modRF, testing)) %>%
+  mutate(predRight = if_else(pred == classe, "correct", "wrong")) %>%
+  mutate(predRight = as.factor(predRight))
+
+
+qplot(num_window, roll_belt, colour = classe, data = testing, shape = predRight, size = predRight)
+```
+
+
+We can also observe the final model error with the inclusion of each tree.
+
+```{r final}
+finMod <- modRF$finalModel
+finMod
+plot(finMod)
+```
+
+
+### New data-set evaluation
+
+The last step is to predict classes to the observations in the new dataset.
+
+```{r newdata}
+newdata_classes <- predict(modelRF, newdata)
+```
+
+
